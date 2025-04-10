@@ -83,7 +83,7 @@ type QueryBuilderProps = {
 
 const QueryBuilder = ({ getQuery }: QueryBuilderProps) => {
   const [conditions, setConditions] = useState<Condition[]>([
-    { field: allFields[0], operator: "equals", value: "" },
+    { field: allFields[0], operator: "contains", value: "" },
   ]);
 
   const updateCondition = (

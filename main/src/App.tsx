@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import axios from "axios";
 import QueryBuilder from "./QueryBuilder";
 import styled from "styled-components";
@@ -92,8 +92,22 @@ const StyledTable = styled.table`
 
 const NoDataText = styled.span`
   display: block;
-  margin-top: 16px;
   color: #888;
+`;
+
+// Container
+const UploadContainer = styled.div`
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  margin-bottom: 10px;
+`;
+
+const DataContainer = styled.div`
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  margin-top: 10px;
 `;
 
 const App = () => {
@@ -101,6 +115,8 @@ const App = () => {
   const [status, setStatus] = useState<string>("");
   const [data, setData] = useState([]);
   const [searchTerm, setSearchTerm] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const tableRef = useRef<HTMLTableElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -113,7 +129,7 @@ const App = () => {
       alert("Please select a file first");
       return;
     }
-
+    setIsLoading(true);
     const formData = new FormData();
     formData.append("file", file);
 
@@ -126,12 +142,15 @@ const App = () => {
         }
       );
       setStatus(response.data.message);
+      setIsLoading(false);
     } catch (error) {
       console.error("Error uploading file:", error);
+      setIsLoading(false);
     }
   };
 
   const handleSearch = async () => {
+    setIsLoading(true);
     if (!searchTerm) {
       alert("Please enter a search term");
       return;
@@ -141,8 +160,10 @@ const App = () => {
         search: searchTerm,
       });
       setData(response.data.data);
+      setIsLoading(false);
     } catch (error) {
       console.error("Error fetching data:", error);
+      setIsLoading(false);
     }
   };
 
@@ -159,13 +180,19 @@ const App = () => {
     });
   };
 
-  const handleEditRow = () => {
-    // Implement edit functionality here
-    alert("Edit functionality is not implemented yet.");
-  };
-  const handleDeleteRow = () => {
-    // Implement delete functionality here
-    alert("Delete functionality is not implemented yet.");
+  // const handleEditRow = () => {
+  //   // Implement edit functionality here
+  //   alert("Edit functionality is not implemented yet.");
+  // };
+  const handleDeleteRow = async (id: string) => {
+    const data = await axios.delete(`http://localhost:5000/delete/`, {
+      data: { id },
+    });
+    if (data.status === 200) {
+      // Display a success message or update the UI as needed
+      alert("Row deleted successfully.");
+      handleSearch();
+    }
   };
 
   const handleGetQuery = useCallback((query: any) => {
@@ -175,59 +202,122 @@ const App = () => {
     // You can send this query to your backend or use it as needed
   }, []);
 
+  const handleDownload = async () => {
+    try {
+      if (!tableRef.current) return;
+      setIsLoading(true);
+      const tableHtml = tableRef.current.outerHTML;
+      const tableHTML = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:x="urn:schemas-microsoft-com:office:excel"
+            xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <!--[if gte mso 9]>
+          <xml>
+            <x:ExcelWorkbook>
+              <x:ExcelWorksheets>
+                <x:ExcelWorksheet>
+                  <x:Name>Sheet1</x:Name>
+                  <x:WorksheetOptions>
+                    <x:DisplayGridlines/>
+                  </x:WorksheetOptions>
+                </x:ExcelWorksheet>
+              </x:ExcelWorksheets>
+            </x:ExcelWorkbook>
+          </xml>
+          <![endif]-->
+          <meta charset="UTF-8">
+        </head>
+        <body>
+          ${tableHtml}
+        </body>
+      </html>
+    `;
+      const blob = new Blob([tableHTML], {
+        type: "application/vnd.ms-excel",
+      });
+
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "table-data.xls";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error downloading file:", error);
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Container>
-      <Title>Upload XLS File</Title>
+      <UploadContainer>
+        <Title>Upload XLS File</Title>
 
-      <FileInput type="file" accept=".xls,.xlsx" onChange={handleFileChange} />
-      <Button onClick={handleUpload}>Upload</Button>
+        <FileInput
+          type="file"
+          accept=".xls,.xlsx"
+          onChange={handleFileChange}
+        />
+        <Button onClick={handleUpload}>Upload</Button>
 
-      <Status>{status}</Status>
+        <Status>{status}</Status>
+      </UploadContainer>
 
       <QueryBuilder getQuery={handleGetQuery} />
-      <Button onClick={handleSearch}>GetData</Button>
-
-      {data.length > 0 ? (
-        <TableContainer>
-          <h3>File Data:</h3>
-          <StyledTable>
-            <thead>
-              <tr>
-                <th>#</th>
-                {Object.keys(data[0]).map((key) => (
-                  <th key={key}>{key}</th>
-                ))}
-                <th>Edit</th>
-                <th>Delete</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((row, index) => (
-                <tr key={index}>
-                  <td>{index + 1}</td>
-                  {Object.entries(row).map(([key, value], i) => (
-                    <td key={i}>
-                      {key.includes("Date") || key === "Month"
-                        ? formatDate(value as string)
-                        : String(value)}
-                    </td>
+      <DataContainer>
+        <Button onClick={handleSearch}>GetData</Button>
+        <Button onClick={handleDownload}>Download Data</Button>
+        {isLoading && <Status>Loading...</Status>}
+        {data.length > 0 && !isLoading ? (
+          <TableContainer>
+            <h3>File Data:</h3>
+            <StyledTable ref={tableRef}>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  {Object.keys(data[0]).map((key) => (
+                    <th key={key}>{key}</th>
                   ))}
-                  <td>
+                  {/* <th>Edit</th> */}
+                  <th>Delete</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((row, index) => (
+                  <tr key={index}>
+                    <td>{index + 1}</td>
+                    {Object.entries(row).map(([key, value], i) => (
+                      <td key={i}>
+                        {key.includes("Date") || key === "Month"
+                          ? formatDate(value as string)
+                          : String(value)}
+                      </td>
+                    ))}
+                    {/* <td>
                     <button className="edit" onClick={() => handleEditRow()}>
                       Edit
                     </button>
-                  </td>
-                  <td>
-                    <button onClick={() => handleDeleteRow()}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </StyledTable>
-        </TableContainer>
-      ) : (
-        <NoDataText>No data found</NoDataText>
-      )}
+                  </td> */}
+                    <td>
+                      {/*//@ts-ignore*/}
+                      <button onClick={() => handleDeleteRow(row._id)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </StyledTable>
+          </TableContainer>
+        ) : (
+          <NoDataText>No data found</NoDataText>
+        )}
+      </DataContainer>
     </Container>
   );
 };
