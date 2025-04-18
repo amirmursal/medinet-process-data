@@ -67,7 +67,14 @@ const Button = styled.button`
   }
 `;
 
-const allFields = ["Patient_Name", "Chart_ID"];
+const allFields = [
+  "Patient_Name",
+  "Chart_ID",
+  "Reason_Code",
+  "Doctor_Name",
+  "Carrier_Name",
+  "Action_Code",
+];
 
 const operators = ["equals", "contains"]; // add more operators as needed "greater than", "less than"
 
